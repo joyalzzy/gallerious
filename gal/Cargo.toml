@@ -1,0 +1,16 @@
+[package]
+name = "gallerious"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = "0.6.20"
+dotenvy = "0.15.7"
+dotenvy_macro = "0.15.7"
+futures = "0.3.28"
+serde = "1.0.189"
+serenity = { version= "0.11", features = ["unstable_discord_api", "builder", "client", "gateway", "model"] }
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+tower-http = { version="0.4.4", features= ["cors"]}
