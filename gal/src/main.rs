@@ -1,7 +1,5 @@
-#[macro_use]
-extern crate dotenvy_macro;
-
 use std::borrow::BorrowMut;
+use std::env;
 
 use axum::extract::{RawQuery, State};
 use axum::Json;
@@ -15,6 +13,14 @@ use serenity::model::prelude::{ChannelId, GuildChannel, GuildId, Ready};
 use serenity::prelude::*;
 
 use tower_http::cors::{Any, CorsLayer};
+
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref BOT_TOKEN: String = env::var("BOT_TOKEN").unwrap();
+    static ref FORUM_ID: u64 = env::var("FORUM_ID").unwrap().parse::<u64>().unwrap();
+    static ref GUILD_ID: u64 = env::var("GUILD_ID").unwrap().parse::<u64>().unwrap();
+}
 
 #[group]
 #[commands(ping)]
@@ -66,11 +72,9 @@ async fn main() {
 
     // Login with a bot token from the environment
 
-    let token = dotenv!("DISCORD_TOKEN");
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-
-    let mut client = Client::builder(token, intents)
+    let mut client = Client::builder(BOT_TOKEN.as_str(), intents)
         .event_handler(Handler)
         .framework(framework)
         .await
@@ -94,13 +98,11 @@ async fn get_links(opts: Option<RawQuery>, State(state): State<DB>) -> Json<Vec<
 }
 
 async fn gen_links(ctx: &Context) -> Vec<String> {
-    let id = dotenv!("FORUM_ID").parse::<u64>().unwrap();
-    let gid = dotenv!("GID").parse::<u64>().unwrap();
-    let archived_channels = ChannelId(id)
+    let archived_channels = ChannelId(*FORUM_ID)
         .get_archived_public_threads(&ctx.http, None, None)
         .await
         .unwrap();
-    let active_channels = GuildId(gid).get_active_threads(&ctx.http).await.unwrap();
+    let active_channels = GuildId(*GUILD_ID).get_active_threads(&ctx.http).await.unwrap();
     // let threads : Vec<(&ChannelId, &GuildChannel)>= channels.iter().filter(|x|
     // x.1.kind == ChannelType::
     //
@@ -110,7 +112,7 @@ async fn gen_links(ctx: &Context) -> Vec<String> {
         active_channels
             .threads
             .iter()
-            .filter(|r| r.parent_id.unwrap() == id),
+            .filter(|r| r.parent_id.unwrap() == *FORUM_ID),
     ) {
         urls.extend_from_slice(get_attachments(ctx, t).await.borrow_mut());
     }

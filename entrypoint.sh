@@ -4,7 +4,7 @@ set -e
 
 run_backend() {
   while : ; do
-    /usr/bin/gallerious
+    BOT_TOKEN=$BOT_TOKEN FORUM_ID=$FORUM_ID GUILD_ID=$GUILD_ID /usr/bin/gallerious
     sleep 1s
   done
 }
