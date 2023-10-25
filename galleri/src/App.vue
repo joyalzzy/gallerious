@@ -17,7 +17,7 @@ import { defineComponent } from 'vue';
 
 
 let lightGallery: any = null;
-console.log(import.meta.env.API_URL)
+console.log(import.meta.env.VITE_API_URL)
 const links = await axios.get(`http://${import.meta.env.VITE_API_URL ?? "localhost:3000/v1"}/links`).then(
     res => res.data
 ).then(

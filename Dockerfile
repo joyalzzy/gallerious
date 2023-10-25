@@ -10,7 +10,6 @@ RUN cd gal \
 
 FROM node:current-alpine AS frontend-build
 ARG VITE_API_URL
-ENV VITE_API_URL "localhost:8080/v1"
 RUN echo $API_URL
 WORKDIR /app
 
