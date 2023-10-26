@@ -1,8 +1,8 @@
 <template>
-    <button v-on:click="updateSlides">Add new image</button>
+    <!-- <button v-on:click="updateSlides">Add new image</button> -->
     <lightgallery :settings="{ speed: 500, plugins: plugins }" :onInit="onInit" :onBeforeSlide="onBeforeSlide">
-        <a v-for="item in items" :key="item.id"  className="gallery-item" :data-src="item.src">
-              <!-- @vue-ignore -->
+        <a v-for="item in items" :key="item.id" className="gallery-item" :data-src="item.src">
+            <!-- @vue-ignore -->
             <img className="img-responsive" :src="item.thumb" />
         </a>
     </lightgallery>
@@ -41,52 +41,62 @@ export default defineComponent({
     data: () => ({
         plugins: [lgZoom, lgVideo],
         items: links.map((a, i) => {
-            return {
-                id: (i + 2).toString(),
-                src: a,
-                thumb: a
+            if (!a.includes("mp4")) {
+                return {
+                    id: (i + 2).toString(),
+                    src: a,
+                    thumb: a
+                }
+            }
+            else {
+                return {
+                    id: (i + 2).toString(),
+                    src: a,
+                    thumb: a,
+                    type: 'video/mp4'
+                }
             }
         })
-        // [
-        // {
-        // id: '1',
-        // size: '1400-933',
-        // src:
-        // 'https://images.unsplash.com/photo-1542103749-8ef59b94f47e?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1400&q=80',
-        // thumb:
-        // 'https://images.unsplash.com/photo-1542103749-8ef59b94f47e?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=240&q=80',
-        // subHtml: `<div class="lightGallery-captions">
-        // <h4>Photo by <a href="https://unsplash.com/@dann">Dan</a></h4>
-        // <p>Published on November 13, 2018</p>
-        // </div>`,
-        // },
-        // {
-        // id: '2',
-        // size: '1400-933',
-        // src:
-        // 'https://images.unsplash.com/photo-1473876988266-ca0860a443b8?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1400&q=80',
-        // thumb:
-        // 'https://images.unsplash.com/photo-1473876988266-ca0860a443b8?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=240&q=80',
-        // subHtml: `<div class="lightGallery-captions">
-        // <h4>Photo by <a href="https://unsplash.com/@kylepyt">Kyle Peyton</a></h4>
-        // <p>Published on September 14, 2016</p>
-        // </div>`,
-        // },
-        // {
-        // id: '3',
-        // size: '1400-932',
-        // src:
-        // 'https://images.unsplash.com/photo-1588953936179-d2a4734c5490?ixlib=rb-1.2.1&ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&auto=format&fit=crop&w=1400&q=80',
-        // thumb:
-        // 'https://images.unsplash.com/photo-1588953936179-d2a4734c5490?ixlib=rb-1.2.1&ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&auto=format&fit=crop&w=240&q=80',
-        // subHtml: `<div class="lightGallery-captions">
-        // <h4>Photo by <a href="https://unsplash.com/@jxnsartstudio">Garrett Jackson</a></h4>
-        // <p>Published on May 8, 2020</p>
-        // </div>`,
-        // },
-        // ],
-    }),
-    methods: {
+    })
+    // [
+    // {
+    // id: '1',
+    // size: '1400-933',
+    // src:
+    // 'https://images.unsplash.com/photo-1542103749-8ef59b94f47e?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1400&q=80',
+    // thumb:
+    // 'https://images.unsplash.com/photo-1542103749-8ef59b94f47e?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=240&q=80',
+    // subHtml: `<div class="lightGallery-captions">
+    // <h4>Photo by <a href="https://unsplash.com/@dann">Dan</a></h4>
+    // <p>Published on November 13, 2018</p>
+    // </div>`,
+    // },
+    // {
+    // id: '2',
+    // size: '1400-933',
+    // src:
+    // 'https://images.unsplash.com/photo-1473876988266-ca0860a443b8?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1400&q=80',
+    // thumb:
+    // 'https://images.unsplash.com/photo-1473876988266-ca0860a443b8?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=240&q=80',
+    // subHtml: `<div class="lightGallery-captions">
+    // <h4>Photo by <a href="https://unsplash.com/@kylepyt">Kyle Peyton</a></h4>
+    // <p>Published on September 14, 2016</p>
+    // </div>`,
+    // },
+    // {
+    // id: '3',
+    // size: '1400-932',
+    // src:
+    // 'https://images.unsplash.com/photo-1588953936179-d2a4734c5490?ixlib=rb-1.2.1&ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&auto=format&fit=crop&w=1400&q=80',
+    // thumb:
+    // 'https://images.unsplash.com/photo-1588953936179-d2a4734c5490?ixlib=rb-1.2.1&ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&auto=format&fit=crop&w=240&q=80',
+    // subHtml: `<div class="lightGallery-captions">
+    // <h4>Photo by <a href="https://unsplash.com/@jxnsartstudio">Garrett Jackson</a></h4>
+    // <p>Published on May 8, 2020</p>
+    // </div>`,
+    // },
+    // ],
+    , methods: {
         onInit: (detail: any) => {
             lightGallery = detail.instance;
         },
