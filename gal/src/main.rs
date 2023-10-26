@@ -52,7 +52,10 @@ impl EventHandler for Handler {
                     context: ctx.clone(),
                 };
                 let cors = CorsLayer::new().allow_origin(Any);
-                let app = Router::new().route("/v1/links", get(get_links)).with_state(state).layer(cors);
+                let app = Router::new()
+                    .route("/v1/links", get(get_links))
+                    .with_state(state)
+                    .layer(cors);
                 let server = axum::Server::bind(&"0.0.0.0:3002".parse().unwrap())
                     .serve(app.into_make_service());
                 server.await;
@@ -71,7 +74,6 @@ async fn main() {
         .group(&GENERAL_GROUP);
 
     // Login with a bot token from the environment
-
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(BOT_TOKEN.as_str(), intents)
@@ -102,7 +104,10 @@ async fn gen_links(ctx: &Context) -> Vec<String> {
         .get_archived_public_threads(&ctx.http, None, None)
         .await
         .unwrap();
-    let active_channels = GuildId(*GUILD_ID).get_active_threads(&ctx.http).await.unwrap();
+    let active_channels = GuildId(*GUILD_ID)
+        .get_active_threads(&ctx.http)
+        .await
+        .unwrap();
     // let threads : Vec<(&ChannelId, &GuildChannel)>= channels.iter().filter(|x|
     // x.1.kind == ChannelType::
     //
@@ -125,15 +130,11 @@ async fn gen_links(ctx: &Context) -> Vec<String> {
 }
 
 async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<String> {
-    return c
+    let mut urls = Vec::new();
+    c
         .messages(&ctx.http, |r| r)
         .await
-        .iter()
-        .map(|r| {
-            r.iter()
-                .map(|a| a.attachments.iter().map(|f| f.url.clone()).collect())
-        })
-        .flatten()
-        .filter(|r: &String| !r.is_empty())
-        .collect();
+        .into_iter()
+        .for_each(|f| f.into_iter().for_each(|g| g.attachments.into_iter().for_each(|h| urls.push(h.url))));
+    urls
 }
