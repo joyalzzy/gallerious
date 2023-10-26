@@ -68,6 +68,7 @@ impl EventHandler for Handler {
 async fn main() {
     // start listening for events by starting a single shard
     // get_links(ctx, channel);
+    println!("configuuring api");
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
@@ -131,10 +132,12 @@ async fn gen_links(ctx: &Context) -> Vec<String> {
 
 async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<String> {
     let mut urls = Vec::new();
-    c
-        .messages(&ctx.http, |r| r)
+    c.messages(&ctx.http, |r| r)
         .await
         .into_iter()
-        .for_each(|f| f.into_iter().for_each(|g| g.attachments.into_iter().for_each(|h| urls.push(h.url))));
+        .for_each(|f| {
+            f.into_iter()
+                .for_each(|g| g.attachments.into_iter().for_each(|h| urls.push(h.url)))
+        });
     urls
 }

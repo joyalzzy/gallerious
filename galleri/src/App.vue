@@ -11,6 +11,7 @@
 <script lang="ts">
 import Lightgallery from 'lightgallery/vue';
 import lgZoom from 'lightgallery/plugins/zoom';
+import lgVideo from 'lightgallery/plugins/video';
 import axios from 'axios';
 import { stringifyQuery } from 'vue-router';
 import { defineComponent } from 'vue';
@@ -38,7 +39,7 @@ export default defineComponent({
         },
     },
     data: () => ({
-        plugins: [lgZoom],
+        plugins: [lgZoom, lgVideo],
         items: links.map((a, i) => {
             return {
                 id: (i + 2).toString(),
