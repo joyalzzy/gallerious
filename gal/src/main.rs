@@ -1,5 +1,3 @@
-#![feature(try_blocks)]
-
 use std::borrow::BorrowMut;
 use std::env;
 use std::ops::ControlFlow;
