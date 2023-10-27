@@ -1,5 +1,8 @@
+#![feature(try_blocks)]
+
 use std::borrow::BorrowMut;
 use std::env;
+use std::ops::ControlFlow;
 
 use axum::extract::{RawQuery, State};
 use axum::Json;
@@ -9,7 +12,7 @@ use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::{CommandResult, StandardFramework};
 use serenity::model::channel::Message;
-use serenity::model::prelude::{ChannelId, GuildChannel, GuildId, Ready};
+use serenity::model::prelude::{ChannelId, GuildChannel, GuildId, Ready, MessageReaction, Reaction, ReactionType};
 use serenity::prelude::*;
 
 use tower_http::cors::{Any, CorsLayer};
@@ -137,7 +140,21 @@ async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<String> {
         .into_iter()
         .for_each(|f| {
             f.into_iter()
-                .for_each(|g| g.attachments.into_iter().for_each(|h| urls.push(h.url)))
+                .for_each(|g| {
+                    let mut blacklisted = false;
+                    g.reactions.into_iter().for_each(|x: MessageReaction|  {
+                        // println!("{:?}", x.reaction_type);
+                        if (x.reaction_type == "▪\u{fe0f}".parse().unwrap()) {
+                            // println!("blacklisted");
+                            blacklisted = true;
+                            return;
+                        }
+                    }); 
+                    if blacklisted {
+                        return;
+                    }
+                    g.attachments.into_iter().for_each(|h| urls.push(h.url))
+                })
         });
     urls
 }
