@@ -1,115 +1,79 @@
 <template>
-    <!-- <button v-on:click="updateSlides">Add new image</button> -->
-    <lightgallery :settings="{ speed: 500, plugins: plugins }" :onInit="onInit" :onBeforeSlide="onBeforeSlide">
-        <a v-for="item in items" :key="item.id" className="gallery-item" :data-src="item.src">
-            <!-- @vue-ignore -->
-            <img className="img-responsive" :src="item.thumb" />
+    <div style="align-items: center; align-self: center; text-align: center;" class="d-flex align-items-center justify-content-center">
+    <h2 style="padding-bottom: 2rem;">gallery ig</h2>
+    <lightgallery id="gallery"
+        :settings="{ speed: 500, plugins: plugins }"
+        :onInit="onInit"
+        :onBeforeSlide="onBeforeSlide"
+    >
+        <a
+            v-for="item in items"
+            :key="item.id"
+            :data-lg-size="200"
+            className="gallery-item"
+            :data-src="item.src"
+        >
+            <img className="img-responsive"  :src="item.src.toString()" style="align-self: center; width: 100%;" />
         </a>
+        
+        
     </lightgallery>
+    </div>
 </template>
 
 <script lang="ts">
 import Lightgallery from 'lightgallery/vue';
+import lgThumbnail from 'lightgallery/plugins/thumbnail';
 import lgZoom from 'lightgallery/plugins/zoom';
-import lgVideo from 'lightgallery/plugins/video';
+import lgVideo from 'lightgallery/plugins/video'
 import axios from 'axios';
 import { stringifyQuery } from 'vue-router';
 import { defineComponent } from 'vue';
+import $ from 'jquery';
 
 
-let lightGallery: any = null;
 console.log(import.meta.env.VITE_API_URL)
-const links = await axios.get(`${import.meta.env.VITE_API_URL ?? "http://localhost:3000/v1"}/links`).then(
+const links : String[] = await axios.get(`${import.meta.env.VITE_API_URL ?? "http://localhost:3000/v1"}/links`).then(
     res => res.data
 ).then(
     res => {
         return res as String[]
     }
 )
+
 export default defineComponent({
     name: 'App',
     components: {
         Lightgallery,
     },
-    watch: {
-        items(newVal, oldVal) {
-            this.$nextTick(() => {
-                lightGallery.refresh();
-            });
-        },
-    },
     data: () => ({
-        plugins: [lgZoom, lgVideo],
-        items: links.map((a, i) => {
+        plugins: [lgThumbnail, lgZoom, lgVideo],
+        items: links.map((a: String, i) => {
             if (!a.includes("mp4")) {
                 return {
-                    id: (i + 2).toString(),
+                    id: i,
                     src: a,
-                    thumb: a
                 }
             }
             else {
                 return {
-                    id: (i + 2).toString(),
-                    src: a,
-                    thumb: a,
-                    type: 'video/mp4'
+                    id: i,
+                    src: a
                 }
             }
         })
-    })
-    // [
-    // {
-    // id: '1',
-    // size: '1400-933',
-    // src:
-    // 'https://images.unsplash.com/photo-1542103749-8ef59b94f47e?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1400&q=80',
-    // thumb:
-    // 'https://images.unsplash.com/photo-1542103749-8ef59b94f47e?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=240&q=80',
-    // subHtml: `<div class="lightGallery-captions">
-    // <h4>Photo by <a href="https://unsplash.com/@dann">Dan</a></h4>
-    // <p>Published on November 13, 2018</p>
-    // </div>`,
-    // },
-    // {
-    // id: '2',
-    // size: '1400-933',
-    // src:
-    // 'https://images.unsplash.com/photo-1473876988266-ca0860a443b8?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1400&q=80',
-    // thumb:
-    // 'https://images.unsplash.com/photo-1473876988266-ca0860a443b8?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=240&q=80',
-    // subHtml: `<div class="lightGallery-captions">
-    // <h4>Photo by <a href="https://unsplash.com/@kylepyt">Kyle Peyton</a></h4>
-    // <p>Published on September 14, 2016</p>
-    // </div>`,
-    // },
-    // {
-    // id: '3',
-    // size: '1400-932',
-    // src:
-    // 'https://images.unsplash.com/photo-1588953936179-d2a4734c5490?ixlib=rb-1.2.1&ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&auto=format&fit=crop&w=1400&q=80',
-    // thumb:
-    // 'https://images.unsplash.com/photo-1588953936179-d2a4734c5490?ixlib=rb-1.2.1&ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&auto=format&fit=crop&w=240&q=80',
-    // subHtml: `<div class="lightGallery-captions">
-    // <h4>Photo by <a href="https://unsplash.com/@jxnsartstudio">Garrett Jackson</a></h4>
-    // <p>Published on May 8, 2020</p>
-    // </div>`,
-    // },
-    // ],
-    , methods: {
-        onInit: (detail: any) => {
-            lightGallery = detail.instance;
-        },
-        updateSlides: function () {
-            this.items = [
-                ...this.items,
-            ]
-            lightGallery.refresh();
+
+    }),
+
+    methods: {
+        onInit: () => {
+            console.log('initalised')
         },
         onBeforeSlide: () => {
-            console.log('calling before slide');
-        },
-    },
+
+        }
+    }
+    
 });
 </script>
 <style lang="css">

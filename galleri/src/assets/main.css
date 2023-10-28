@@ -4,8 +4,11 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
-
+  text-align: center;
   font-weight: normal;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 a,
@@ -16,6 +19,11 @@ a,
 }
 
 @media (hover: hover) {
+  a {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
   a:hover {
     background-color: hsla(160, 100%, 37%, 0.2);
   }
@@ -29,7 +37,7 @@ a,
 
   #app {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* grid-template-columns: 1fr 1fr; */
     padding: 0 2rem;
   }
 }
