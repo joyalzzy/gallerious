@@ -1,6 +1,7 @@
 use std::borrow::BorrowMut;
 use std::env;
 use std::ops::ControlFlow;
+use std::time::Instant;
 
 use axum::extract::{RawQuery, State};
 use axum::Json;
@@ -13,6 +14,7 @@ use serenity::model::channel::Message;
 use serenity::model::prelude::{ChannelId, GuildChannel, GuildId, Ready, MessageReaction, Reaction, ReactionType};
 use serenity::prelude::*;
 
+use tokio::time::Interval;
 use tower_http::cors::{Any, CorsLayer};
 
 use lazy_static::lazy_static;
@@ -33,6 +35,17 @@ struct Handler;
 #[derive(Clone)]
 pub struct DB {
     pub context: Context,
+    pub cache: Json<Vec<String>>,
+    pub cache_t: Instant
+}
+impl DB {
+    pub fn default (ctx: Context, cache: Json<Vec<String>>)-> DB {
+        return DB {
+            context: ctx,
+            cache: cache,
+            cache_t: Instant::now()
+        }
+    }
 }
 
 // pub type AppState = Arc<Mutex<Vec<DB>>>;
@@ -44,14 +57,13 @@ pub struct DB {
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
-        println!("started");
+
     }
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         tokio::spawn(async move {
             loop {
-                let state = DB {
-                    context: ctx.clone(),
-                };
+                println!("initialising api");
+                let state = DB::default(ctx.clone(), Json(gen_links(&ctx).await));
                 let cors = CorsLayer::new().allow_origin(Any);
                 let app = Router::new()
                     .route("/v1/links", get(get_links))
@@ -60,8 +72,10 @@ impl EventHandler for Handler {
                 let server = axum::Server::bind(&"0.0.0.0:3002".parse().unwrap())
                     .serve(app.into_make_service());
                 server.await;
+
             }
         });
+        println!("started");
     }
 }
 
@@ -69,7 +83,6 @@ impl EventHandler for Handler {
 async fn main() {
     // start listening for events by starting a single shard
     // get_links(ctx, channel);
-    println!("configuuring api");
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
@@ -96,9 +109,15 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-async fn get_links(opts: Option<RawQuery>, State(state): State<DB>) -> Json<Vec<String>> {
-    let _ = opts;
-    Json(gen_links(&state.context).await)
+async fn get_links(opts: Option<RawQuery>, State(mut state): State<DB>) -> Json<Vec<String>> {
+    if state.cache_t.elapsed().as_secs() > 300 {
+        println!("refreshing cache");
+        let _ = opts;
+        state.cache = Json(gen_links(&state.context).await) ;
+        state.cache_t = Instant::now();
+    }
+    return state.cache;
+    
 }
 
 async fn gen_links(ctx: &Context) -> Vec<String> {
