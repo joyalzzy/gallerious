@@ -1,6 +1,6 @@
 use std::borrow::BorrowMut;
 use std::env;
-use std::ops::ControlFlow;
+
 use std::time::Instant;
 
 use axum::extract::{RawQuery, State};
@@ -11,10 +11,11 @@ use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::{CommandResult, StandardFramework};
 use serenity::model::channel::Message;
-use serenity::model::prelude::{ChannelId, GuildChannel, GuildId, Ready, MessageReaction, Reaction, ReactionType};
+use serenity::model::prelude::{
+    ChannelId, GuildChannel, GuildId, MessageReaction, Ready,
+};
 use serenity::prelude::*;
 
-use tokio::time::Interval;
 use tower_http::cors::{Any, CorsLayer};
 
 use lazy_static::lazy_static;
@@ -36,15 +37,15 @@ struct Handler;
 pub struct DB {
     pub context: Context,
     pub cache: Json<Vec<String>>,
-    pub cache_t: Instant
+    pub cache_t: Instant,
 }
 impl DB {
-    pub fn default (ctx: Context, cache: Json<Vec<String>>)-> DB {
+    pub fn default(ctx: Context, cache: Json<Vec<String>>) -> DB {
         return DB {
             context: ctx,
             cache: cache,
-            cache_t: Instant::now()
-        }
+            cache_t: Instant::now(),
+        };
     }
 }
 
@@ -56,9 +57,7 @@ impl DB {
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
-
-    }
+    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {}
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         tokio::spawn(async move {
             loop {
@@ -72,7 +71,6 @@ impl EventHandler for Handler {
                 let server = axum::Server::bind(&"0.0.0.0:3002".parse().unwrap())
                     .serve(app.into_make_service());
                 server.await;
-
             }
         });
         println!("started");
@@ -113,11 +111,10 @@ async fn get_links(opts: Option<RawQuery>, State(mut state): State<DB>) -> Json<
     if state.cache_t.elapsed().as_secs() > 300 {
         println!("refreshing cache");
         let _ = opts;
-        state.cache = Json(gen_links(&state.context).await) ;
+        state.cache = Json(gen_links(&state.context).await);
         state.cache_t = Instant::now();
     }
     return state.cache;
-    
 }
 
 async fn gen_links(ctx: &Context) -> Vec<String> {
@@ -156,22 +153,21 @@ async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<String> {
         .await
         .into_iter()
         .for_each(|f| {
-            f.into_iter()
-                .for_each(|g| {
-                    let mut blacklisted = false;
-                    g.reactions.into_iter().for_each(|x: MessageReaction|  {
-                        // println!("{:?}", x.reaction_type);
-                        if (x.reaction_type == "▪\u{fe0f}".parse().unwrap()) {
-                            // println!("blacklisted");
-                            blacklisted = true;
-                            return;
-                        }
-                    }); 
-                    if blacklisted {
+            f.into_iter().for_each(|g| {
+                let mut blacklisted = false;
+                g.reactions.into_iter().for_each(|x: MessageReaction| {
+                    // println!("{:?}", x.reaction_type);
+                    if x.reaction_type == "▪\u{fe0f}".parse().unwrap() {
+                        // println!("blacklisted");
+                        blacklisted = true;
                         return;
                     }
-                    g.attachments.into_iter().for_each(|h| urls.push(h.url))
-                })
+                });
+                if blacklisted {
+                    return;
+                }
+                g.attachments.into_iter().for_each(|h| urls.push(h.url))
+            })
         });
     urls
 }
