@@ -1,6 +1,7 @@
 use std::borrow::BorrowMut;
 use std::env;
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use axum::extract::{RawQuery, State};
@@ -16,6 +17,7 @@ use serenity::model::prelude::{
 };
 use serenity::prelude::*;
 
+use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
 use lazy_static::lazy_static;
@@ -62,11 +64,11 @@ impl EventHandler for Handler {
         tokio::spawn(async move {
             loop {
                 println!("initialising api");
-                let state = DB::default(ctx.clone(), Json(gen_links(&ctx).await));
+                let  state = Arc::new(Mutex::new(DB::default(ctx.clone(), Json(gen_links(&ctx).await))));
                 let cors = CorsLayer::new().allow_origin(Any);
                 let app = Router::new()
                     .route("/v1/links", get(get_links))
-                    .with_state(state)
+                    .with_state(Arc::clone(&state))
                     .layer(cors);
                 let server = axum::Server::bind(&"0.0.0.0:3002".parse().unwrap())
                     .serve(app.into_make_service());
@@ -107,14 +109,16 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-async fn get_links(opts: Option<RawQuery>, State(mut state): State<DB>) -> Json<Vec<String>> {
-    if state.cache_t.elapsed().as_secs() > 300 {
-        println!("refreshing cache");
+async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) -> Json<Vec<String>> {
+    let mut  s = state.lock().await;
+    let _ = opts;
+    if s.cache_t.elapsed().as_secs() > 30 {
+        println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
         let _ = opts;
-        state.cache = Json(gen_links(&state.context).await);
-        state.cache_t = Instant::now();
+        s.cache = Json(gen_links(&s.context).await);
+        s.cache_t = Instant::now();
     }
-    return state.cache;
+    return s.cache.clone();
 }
 
 async fn gen_links(ctx: &Context) -> Vec<String> {
