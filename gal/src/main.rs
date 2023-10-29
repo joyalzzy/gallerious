@@ -26,6 +26,7 @@ lazy_static! {
     static ref BOT_TOKEN: String = env::var("BOT_TOKEN").unwrap();
     static ref FORUM_ID: u64 = env::var("FORUM_ID").unwrap().parse::<u64>().unwrap();
     static ref GUILD_ID: u64 = env::var("GUILD_ID").unwrap().parse::<u64>().unwrap();
+    static ref CACHE_TIME: u64 = env::var("CACHE_TIME").unwrap().parse::<u64>().unwrap();
 }
 
 #[group]
@@ -112,7 +113,7 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
 async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) -> Json<Vec<String>> {
     let mut  s = state.lock().await;
     let _ = opts;
-    if s.cache_t.elapsed().as_secs() > 30 {
+    if CACHE_TIME.lt(&s.cache_t.elapsed().as_secs()) {
         println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
         let _ = opts;
         s.cache = Json(gen_links(&s.context).await);
