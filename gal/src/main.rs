@@ -8,12 +8,14 @@ use axum::extract::{RawQuery, State};
 use axum::Json;
 use axum::{routing::get, Router};
 
+use futures::FutureExt;
 use serenity::async_trait;
+use serenity::builder::CreateStageInstance;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::{CommandResult, StandardFramework};
 use serenity::model::channel::Message;
 use serenity::model::prelude::{
-    ChannelId, GuildChannel, GuildId, MessageReaction, Ready,
+    Channel, ChannelId, ForumTagId, GuildChannel, GuildId, MessageReaction, Ready, ForumTag,
 };
 use serenity::prelude::*;
 
@@ -21,6 +23,8 @@ use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
 use lazy_static::lazy_static;
+
+use serde::Serialize;
 
 lazy_static! {
     static ref BOT_TOKEN: String = env::var("BOT_TOKEN").unwrap();
@@ -36,17 +40,39 @@ struct General;
 struct Handler;
 
 #[allow(non_snake_case)]
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
+pub struct Cache {
+    pub tags: Vec<Tag>,
+    pub items: Vec<Media>,
+}
+
+#[derive(Clone, Serialize)]
+struct Tag {
+    id: ForumTagId,
+    name: String,
+}
+
+#[derive(Clone, Serialize)]
+struct Media {
+    src: String,
+    tag: Vec<Tag>,
+}
+
+#[allow(non_snake_case)]
 pub struct DB {
     pub context: Context,
-    pub cache: Json<Vec<String>>,
+    pub cache: Cache,
     pub cache_t: Instant,
 }
+
 impl DB {
     pub fn default(ctx: Context, cache: Json<Vec<String>>) -> DB {
         return DB {
             context: ctx,
-            cache: cache,
+            cache: Cache {
+                tags: Vec::new(),
+                items: Vec::new()
+            },
             cache_t: Instant::now(),
         };
     }
@@ -60,12 +86,17 @@ impl DB {
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {}
+    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
+        gen_tags(&ctx).await;
+    }
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         tokio::spawn(async move {
             loop {
                 println!("initialising api");
-                let  state = Arc::new(Mutex::new(DB::default(ctx.clone(), Json(gen_links(&ctx).await))));
+                let state = Arc::new(Mutex::new(DB::default(
+                    ctx.clone(),
+                    Json(gen_links(&ctx).await),
+                )));
                 let cors = CorsLayer::new().allow_origin(Any);
                 let app = Router::new()
                     .route("/v1/links", get(get_links))
@@ -110,19 +141,28 @@ async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) -> Json<Vec<String>> {
-    let mut  s = state.lock().await;
+
+#[axum::debug_handler]
+async fn get_links(
+    opts: Option<RawQuery>,
+    State(state): State<Arc<Mutex<DB>>>,
+) -> Json<Cache> {
+    let mut s = state.lock().await;
     let _ = opts;
+
     if CACHE_TIME.lt(&s.cache_t.elapsed().as_secs()) {
         println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
         let _ = opts;
-        s.cache = Json(gen_links(&s.context).await);
+        s.cache = Cache {
+            items: gen_links(&s.context).await,
+            tags: gen_tags(&s.context).await
+        } ;
         s.cache_t = Instant::now();
     }
-    return s.cache.clone();
+    return Json(s.cache.clone());
 }
 
-async fn gen_links(ctx: &Context) -> Vec<String> {
+async fn gen_links(ctx: &Context) -> Vec<Media> {
     let archived_channels = ChannelId(*FORUM_ID)
         .get_archived_public_threads(&ctx.http, None, None)
         .await
@@ -135,7 +175,7 @@ async fn gen_links(ctx: &Context) -> Vec<String> {
     // x.1.kind == ChannelType::
     //
     // ).collect();
-    let mut urls = vec![];
+    let mut urls: Vec<Media> = vec![];
     for t in archived_channels.threads.iter().chain(
         active_channels
             .threads
@@ -145,14 +185,24 @@ async fn gen_links(ctx: &Context) -> Vec<String> {
         urls.extend_from_slice(get_attachments(ctx, t).await.borrow_mut());
     }
     urls
-    // for msg in messages {
-    // if let img  = Some(msg.attachments).unwrap() {
-    // img.iter().for_each(|f| println!("{:?}", f.proxy_url));
-    // }
-    // }
+
 }
 
-async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<String> {
+
+async fn gen_tags(ctx: &Context) -> Vec<Tag> {
+    let results = ctx.http.get_channel(*FORUM_ID).await;
+    results.unwrap()
+        .guild()
+        .unwrap()
+        .available_tags
+        .iter()
+        .map(|y| Tag {
+            id: y.id,
+            name: y.name.clone(),
+        }).collect()
+}
+
+async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<Media> {
     let mut urls = Vec::new();
     c.messages(&ctx.http, |r| r)
         .await
@@ -171,7 +221,19 @@ async fn get_attachments(ctx: &Context, c: &GuildChannel) -> Vec<String> {
                 if blacklisted {
                     return;
                 }
-                g.attachments.into_iter().for_each(|h| urls.push(h.url))
+                g.attachments.into_iter().for_each(|h| urls.push(Media {
+                    src: h.url,
+                    tag: c.applied_tags.clone().into_iter().map(
+                        |p| {
+                            let tag = c.available_tags.clone().iter().filter(|o| o.id == p.clone()).map(|o| o.clone()).collect::<Vec<ForumTag>>()[0];
+                            Tag {
+                                id: tag.id,
+                                name: tag.name
+
+                            }
+                        }
+                    ).collect()
+                }))
             })
         });
     urls
