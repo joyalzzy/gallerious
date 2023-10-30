@@ -13,7 +13,10 @@
             className="gallery-item"
             :data-src="item.src"
         >
-            <img className="img-responsive"  :src="item.src.toString()" style="align-self: center; width: 100%;" />
+            <img v-if="!item.video" className="img-responsive"  :src="item.src.toString()" style="align-self: center; width: 100%;" />
+            <video v-else className="" style="align-self: center; width: 100%;" controls>
+                <source :src="item.src.toString()" type="video/mp4">
+            </video>
         </a>
         
         
@@ -27,9 +30,7 @@ import lgThumbnail from 'lightgallery/plugins/thumbnail';
 import lgZoom from 'lightgallery/plugins/zoom';
 import lgVideo from 'lightgallery/plugins/video'
 import axios from 'axios';
-import { stringifyQuery } from 'vue-router';
 import { defineComponent } from 'vue';
-import $ from 'jquery';
 
 
 console.log(import.meta.env.VITE_API_URL)
@@ -44,21 +45,23 @@ const links : String[] = await axios.get(`${import.meta.env.VITE_API_URL ?? "htt
 export default defineComponent({
     name: 'App',
     components: {
-        Lightgallery,
+        // Lightgallery,
     },
     data: () => ({
-        plugins: [lgThumbnail, lgZoom, lgVideo],
+        plugins: [ lgZoom, lgVideo],
         items: links.map((a: String, i) => {
-            if (!a.includes("mp4")) {
+            if (a.includes("mp4")) {
                 return {
                     id: i,
                     src: a,
+                    video: true
                 }
             }
             else {
                 return {
                     id: i,
-                    src: a
+                    src: a,
+                    video: false
                 }
             }
         })
