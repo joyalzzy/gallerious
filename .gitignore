@@ -1,6 +1,5 @@
 target
 node_modules
-*.md
 dist
 .env
 compose.yml
