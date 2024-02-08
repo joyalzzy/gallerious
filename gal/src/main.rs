@@ -2,6 +2,7 @@ use std::borrow::BorrowMut;
 use std::env;
 
 use std::sync::Arc;
+use std::thread::spawn;
 use std::time::{Duration, Instant};
 
 use axum::extract::{RawQuery, State};
@@ -14,12 +15,11 @@ use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::{CommandResult, StandardFramework};
 use serenity::model::channel::Message;
-use serenity::model::prelude::{
-    ChannelId, ForumTagId, GuildChannel, GuildId, Ready, ReactionType,
-};
+use serenity::model::prelude::{ChannelId, ForumTagId, GuildChannel, GuildId, ReactionType, Ready};
 use serenity::prelude::*;
 
 use tokio::sync::Mutex;
+use tokio::time::{interval, sleep};
 use tower_http::cors::{Any, CorsLayer};
 
 use lazy_static::lazy_static;
@@ -36,7 +36,6 @@ lazy_static! {
 }
 
 #[group]
-#[commands(ping)]
 struct General;
 
 struct Handler;
@@ -68,6 +67,7 @@ pub struct DB {
     pub cache_t: Instant,
 }
 
+
 impl DB {
     pub fn default(ctx: Context) -> DB {
         return DB {
@@ -76,46 +76,58 @@ impl DB {
                 tags: Vec::new(),
                 items: Vec::new(),
             },
-            cache_t: Instant::now() - Duration::from_secs(*CACHE_TIME),
+            cache_t: Instant::now() - Duration::from_secs(*CACHE_TIME + 100),
         };
     }
 }
-
-// pub type AppState = Arc<Mutex<Vec<DB>>>;
-//
-// pub fn app_state() -> AppState {
-// Arc::new(Mutex::new(Vec::new()))
-// }
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, _data_about_bot: Ready) {}
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        let state = Arc::new(Mutex::new(DB::default(
-            ctx.clone()
-        )));
+        let state = Arc::new(Mutex::new(DB::default(ctx.clone())));
 
+        println!("initialising api");
+        let cors = CorsLayer::new().allow_origin(Any);
+        let app = Router::new()
+            .route("/v1/links", get(get_links))
+            .with_state(Arc::clone(&state))
+            .layer(cors);
+        let server =
+            axum::Server::bind(&"0.0.0.0:3002".parse().unwrap()).serve(app.into_make_service());
+        // Spawn the refresh task
         tokio::spawn(async move {
-            loop {
-                println!("initialising api");
-                let cors = CorsLayer::new().allow_origin(Any);
-                let app = Router::new()
-                    .route("/v1/links", get(get_links))
-                    .with_state(Arc::clone(&state))
-                    .layer(cors);
-                let server = axum::Server::bind(&"0.0.0.0:3002".parse().unwrap())
-                    .serve(app.into_make_service());
-                server.await;
-            }
+            refresh(Arc::clone(&state)).await;
         });
+        server.await.unwrap();
         println!("started");
     }
+}
+
+async fn refresh(state: Arc<Mutex<DB>>) {
+    let mut interval = interval(Duration::from_secs(*CACHE_TIME));
+    loop {
+        interval.tick().await;
+        let mut s = state.lock().await;
+        if CACHE_TIME.lt(&s.cache_t.elapsed().as_secs()) {
+            println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
+            let (items, tags) = gen_links(&s.context).await;
+            (*s).cache = Cache {
+                items: items,
+                tags: tags,
+            };
+            (*s).cache_t = Instant::now();
+            drop(s);
+            
+        } else {
+            println!("not refreshing {}", s.cache_t.elapsed().as_secs());
+        }
+    } 
 }
 
 #[tokio::main]
 async fn main() {
     // start listening for events by starting a single shard
-    // get_links(ctx, channel);
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
@@ -135,28 +147,11 @@ async fn main() {
     };
 }
 
-#[command]
-async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.reply(ctx, "Pong!").await?;
-
-    Ok(())
-}
-
 #[axum::debug_handler]
 async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) -> Json<Cache> {
-    let mut s = state.lock().await;
+    let s = state.lock().await;
+    println!("thing");
     let _ = opts;
-
-    if CACHE_TIME.lt(&s.cache_t.elapsed().as_secs()) {
-        println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
-        let (items, tags) = gen_links(&s.context).await;
-        s.cache = Cache {
-            items: items,
-            tags: tags,
-        };
-        s.cache_t = Instant::now();
-    }
-    println!("{:?}", Json(s.cache.items.clone()));
     return Json(s.cache.clone());
 }
 
@@ -208,12 +203,15 @@ async fn get_attachments(ctx: &Context, c: &GuildChannel, tags: &Vec<Tag>) -> Ve
     let message = c.messages(&ctx.http, |r| r).await.expect("No permission");
 
     for attach in message.into_iter().fold(vec![], |a, b| {
-        if b.reactions.into_iter().map(|r| r.reaction_type).any(|x| "▪\u{fe0f}".parse::<ReactionType>().unwrap() == x.clone()){
-            return a
+        if b.reactions
+            .into_iter()
+            .map(|r| r.reaction_type)
+            .any(|x| "▪\u{fe0f}".parse::<ReactionType>().unwrap() == x.clone())
+        {
+            return a;
         };
         return [a, b.attachments].concat();
     }) {
-        
         medias.push(Media {
             src: attach.url.clone(),
             tags: c
