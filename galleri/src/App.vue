@@ -11,16 +11,9 @@
         </div>
         <lightgallery id="gallery" :settings="{ speed: 500, plugins: plugins }" :onInit="onInit"
             :onBeforeSlide="onBeforeSlide">
-            <a v-for="(item, i) in items" :key="i" :data-lg-size="200" className="gallery-item" :data-src="item.src">
-                <template v-if="tagCheck(item)">
-                    <img v-if="!item.media_type.startsWith('video')" className="img-responsive" :src="item.src.toString()"
-                        style="align-self: center; width: 100%" />
-                    <video v-else className="" style="align-self: center; width: 100%" controls>
-                        <source :src="item.src.toString()" type="video/mp4" />
-                    </video>
-                </template>
-
-            </a>
+            <template v-for="(post, i) in posts" :key="i" :data-lg-size="200" className="gallery-item" :data-src="post" >
+                <div v-if=tagCheck(post) v-html=renderPost(post)></div>
+            </template>
         </lightgallery>
     </div>
 </template>
@@ -29,23 +22,27 @@
 import axios from 'axios'
 import lgVideo from 'lightgallery/plugins/video'
 import lgZoom from 'lightgallery/plugins/zoom'
+import { endianness } from 'os'
 import { defineComponent, ref, type Ref } from 'vue'
 
-
-console.log(import.meta.env.VITE_API_URL)
-
 type Response = {
-    items: Media[]
+    posts: Post[]
     tags: Tag[]
 }
 type Media = {
     src: String
-    tags: Tag[]
     media_type: String
 }
 type Tag = {
     id: String
     name: String
+}
+
+type Post = {
+    title: String
+    author: String
+    medias: Media[]
+    tags: Tag[]
 }
 
 const DefaultTag: Tag = {
@@ -55,49 +52,28 @@ const DefaultTag: Tag = {
 let res: Response = await axios.get(`${import.meta.env.VITE_API_URL ?? "http://localhost:3002/v1"}/links`).then(
     res => res.data
 )
-// )
-// let res: Response = {, UNIX_EPOCH
-// items: [
-// {
-// src: 'https://cdn.discordapp.com/attachments/1140180380683612160/1140564617077203047/huge_2023-08-14_16.26.39.png?ex=6551e013&is=653f6b13&hm=1ef2518ffe1ffd1742caa85dd22c800605a721d62ca0ab9c38283e4a1f615a86&',
-// media_type: "video/mp4",
-// tags: [
-// {
-// id: 'val',
-// name: 'val'
-// }, {
-// id: 'osu',
-// name: 'osu'
-// }
-// ]
-// },
-// {
-// src: 'https://cdn.discordapp.com/attachments/1140180380683612160/1140564620046766100/huge_2023-08-14_16.24.44.png?ex=6551e014&is=653f6b14&hm=76450bbb2660afa4306198523e6b345069e990db653455f2f55b9fc52aa18432&',
-// media_type: "video/mp4",
-// tags: [{ id: 'osu', name: 'osu' }]
-// }
-// ],
-// tags: [
-// {
-// id: 'osu',
-// name: 'osu'
-// },
-// {
-// id: 'val',
-// name: 'val'
-// }
-// ]
-// };
 
 let selectedTags: Ref<Tag[]> = ref(res.tags)
 
-const tagCheck = (t: Media) => {
+const tagCheck = (t: Post) => {
     let toShow = selectedTags.value.some((item, i) => {
         // console.log(`${item.id} ${t.tags[i].id}`)
         return t.tags.map(x => x.id).indexOf(item.id) !== -1;
     })
     // console.log(`${t.src} is ${toShow} as it has ${t.tags.map(x => x.name).join(' and ')}`)
     return toShow
+}
+const renderPost = (post: Post) => {
+    let returnCase : String = `<div class="post"><p style="align-self: left;">${post.title}</p>`;
+    for (let media of post.medias) {
+        returnCase += (media.media_type.startsWith('video') ? `<video style="align-self: center; width: 100%" controls>
+                    <source src="${media.src}" type="video/mp4" />
+                </video>`  :      `<img className="img-responsive" src="${media.src}"
+                    style="align-self: center; width: 100%" />`)
+    }
+    returnCase += `<p style="align-self: right;">${post.author}</p>\n</div>`;
+    return returnCase
+;
 }
 
 export default defineComponent({
@@ -107,7 +83,7 @@ export default defineComponent({
     },
     data: () => ({
         plugins: [lgZoom, lgVideo],
-        items: res.items,
+        posts: res.posts,
 
         // items:  res.lin,
         tags: res.tags,
@@ -133,7 +109,8 @@ export default defineComponent({
             }
 
         },
-        tagCheck: (t: Media) => { return tagCheck(t) }
+        renderPost: (post: Post) => { return renderPost(post) },
+        tagCheck: (t: Post) => { return tagCheck(t) }
     }
 })
 </script>

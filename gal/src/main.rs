@@ -14,7 +14,7 @@ use reqwest::header::CONTENT_TYPE;
 use serenity::async_trait;
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::{CommandResult, StandardFramework};
-use serenity::model::channel::Message;
+use serenity::model::channel::{Attachment, Message};
 use serenity::model::prelude::{ChannelId, ForumTagId, GuildChannel, GuildId, ReactionType, Ready};
 use serenity::prelude::*;
 
@@ -44,7 +44,7 @@ struct Handler;
 #[derive(Clone, Serialize, Debug)]
 pub struct Cache {
     pub tags: Vec<Tag>,
-    pub items: Vec<Media>,
+    pub posts: Vec<Post>,
 }
 
 #[derive(Clone, Serialize, Debug)]
@@ -56,7 +56,6 @@ pub struct Tag {
 #[derive(Clone, Serialize, Debug)]
 pub struct Media {
     pub src: String,
-    pub tags: Vec<Tag>,
     pub media_type: String,
 }
 
@@ -67,13 +66,21 @@ pub struct DB {
     pub cache_t: Instant,
 }
 
+#[derive(Clone, Serialize, Debug)]
+pub struct Post {
+    pub title: String,
+    pub author: String,
+    pub medias: Vec<Media>,
+    pub tags: Vec<Tag>,
+}
+
 impl DB {
     pub fn default(ctx: Context) -> DB {
         return DB {
             context: ctx,
             cache: Cache {
                 tags: Vec::new(),
-                items: Vec::new(),
+                posts: Vec::new(),
             },
             cache_t: Instant::now() - Duration::from_secs(*CACHE_TIME + 100),
         };
@@ -85,7 +92,6 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, _data_about_bot: Ready) {}
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
         let state = Arc::new(Mutex::new(DB::default(ctx.clone())));
-
         println!("initialising api");
         let cors = CorsLayer::new().allow_origin(Any);
         let app = Router::new()
@@ -99,7 +105,6 @@ impl EventHandler for Handler {
             let mut interval = interval(Duration::from_secs(*CACHE_TIME));
             loop {
                 interval.tick().await;
-
                 refresh(Arc::clone(&state)).await;
             }
         });
@@ -111,9 +116,9 @@ impl EventHandler for Handler {
 async fn refresh(state: Arc<Mutex<DB>>) {
     let mut s = state.lock().await;
     println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
-    let (items, tags) = gen_links(&s.context).await;
+    let (items, tags) = gen_response(&s.context).await;
     (*s).cache = Cache {
-        items: items,
+        posts: items,
         tags: tags,
     };
     (*s).cache_t = Instant::now();
@@ -144,7 +149,6 @@ async fn main() {
 
 #[axum::debug_handler]
 async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) -> Json<Cache> {
-
     let ss = Arc::clone(&state);
     let s = ss.lock().await;
     if (s.cache_t.elapsed().as_secs().gt(&CACHE_TIME)) {
@@ -154,7 +158,7 @@ async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) 
     return Json(s.cache.clone());
 }
 
-async fn gen_links(ctx: &Context) -> (Vec<Media>, Vec<Tag>) {
+async fn gen_response(ctx: &Context) -> (Vec<Post>, Vec<Tag>) {
     println!("Link requested");
     let tags = gen_tags(&ctx).await;
     let archived_channels = ChannelId(*FORUM_ID)
@@ -169,17 +173,17 @@ async fn gen_links(ctx: &Context) -> (Vec<Media>, Vec<Tag>) {
     // x.1.kind == ChannelType::
     //
     // ).collect();
-    let mut medias: Vec<Media> = vec![];
+    let mut posts: Vec<Post> = vec![];
     for t in archived_channels.threads.iter().chain(
         active_channels
             .threads
             .iter()
             .filter(|r| r.parent_id.unwrap() == *FORUM_ID),
     ) {
-        medias.extend_from_slice(get_attachments(ctx, t, &tags).await.borrow_mut());
+        posts.push(gen_post(ctx, t, &tags).await);
     }
 
-    (medias, tags)
+    (posts.into_iter().filter(|f| !f.medias.is_empty()).collect(), tags)
 }
 
 async fn gen_tags(ctx: &Context) -> Vec<Tag> {
@@ -197,11 +201,11 @@ async fn gen_tags(ctx: &Context) -> Vec<Tag> {
         .collect()
 }
 
-async fn get_attachments(ctx: &Context, c: &GuildChannel, tags: &Vec<Tag>) -> Vec<Media> {
+async fn gen_post(ctx: &Context, c: &GuildChannel, tags: &Vec<Tag>) -> Post {
     let mut medias = Vec::new();
     let message = c.messages(&ctx.http, |r| r).await.expect("No permission");
 
-    for attach in message.into_iter().fold(vec![], |a, b| {
+    for attach in message.clone().into_iter().fold(vec![], |a, b| {
         if b.reactions
             .into_iter()
             .map(|r| r.reaction_type)
@@ -213,27 +217,33 @@ async fn get_attachments(ctx: &Context, c: &GuildChannel, tags: &Vec<Tag>) -> Ve
     }) {
         medias.push(Media {
             src: attach.url.clone(),
-            tags: c
-                .applied_tags
-                .clone()
-                .into_iter()
-                .map(|tag| {
-                    let name;
-                    if let Some(t) = tags.into_iter().find(|f| f.id == tag) {
-                        name = t.name.clone();
-                    } else {
-                        name = "errored".to_string();
-                    }
-                    Tag {
-                        id: tag,
-                        name: name, // name: "thing".to_string()
-                    }
-                })
-                .collect(),
             media_type: is_video(attach.url).await,
         })
     }
-    medias
+
+    let post = Post {
+        title: c.name.clone(),
+        author: message.last().unwrap().author.name.clone(),
+        medias: medias,
+        tags: c
+            .applied_tags
+            .clone()
+            .into_iter()
+            .map(|tag| {
+                let name;
+                if let Some(t) = tags.into_iter().find(|f| f.id == tag) {
+                    name = t.name.clone();
+                } else {
+                    name = "errored".to_string();
+                }
+                Tag {
+                    id: tag,
+                    name: name, // name: "thing".to_string()
+                }
+            })
+            .collect(),
+    };
+    post
 }
 
 async fn is_video(url: String) -> String {
@@ -247,4 +257,3 @@ async fn is_video(url: String) -> String {
         .unwrap()
         .to_string()
 }
-
