@@ -67,7 +67,6 @@ pub struct DB {
     pub cache_t: Instant,
 }
 
-
 impl DB {
     pub fn default(ctx: Context) -> DB {
         return DB {
@@ -97,7 +96,12 @@ impl EventHandler for Handler {
             axum::Server::bind(&"0.0.0.0:3002".parse().unwrap()).serve(app.into_make_service());
         // Spawn the refresh task
         tokio::spawn(async move {
-            refresh(Arc::clone(&state)).await;
+            let mut interval = interval(Duration::from_secs(*CACHE_TIME));
+            loop {
+                interval.tick().await;
+
+                refresh(Arc::clone(&state)).await;
+            }
         });
         server.await.unwrap();
         println!("started");
@@ -105,24 +109,15 @@ impl EventHandler for Handler {
 }
 
 async fn refresh(state: Arc<Mutex<DB>>) {
-    let mut interval = interval(Duration::from_secs(*CACHE_TIME));
-    loop {
-        interval.tick().await;
-        let mut s = state.lock().await;
-        if CACHE_TIME.lt(&s.cache_t.elapsed().as_secs()) {
-            println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
-            let (items, tags) = gen_links(&s.context).await;
-            (*s).cache = Cache {
-                items: items,
-                tags: tags,
-            };
-            (*s).cache_t = Instant::now();
-            drop(s);
-            
-        } else {
-            println!("not refreshing {}", s.cache_t.elapsed().as_secs());
-        }
-    } 
+    let mut s = state.lock().await;
+    println!("refreshing cache with {:?}", s.cache_t.elapsed().as_secs());
+    let (items, tags) = gen_links(&s.context).await;
+    (*s).cache = Cache {
+        items: items,
+        tags: tags,
+    };
+    (*s).cache_t = Instant::now();
+    drop(s);
 }
 
 #[tokio::main]
@@ -149,8 +144,12 @@ async fn main() {
 
 #[axum::debug_handler]
 async fn get_links(opts: Option<RawQuery>, State(state): State<Arc<Mutex<DB>>>) -> Json<Cache> {
-    let s = state.lock().await;
-    println!("thing");
+
+    let ss = Arc::clone(&state);
+    let s = ss.lock().await;
+    if (s.cache_t.elapsed().as_secs().gt(&CACHE_TIME)) {
+        refresh(state).await;
+    }
     let _ = opts;
     return Json(s.cache.clone());
 }
@@ -248,3 +247,4 @@ async fn is_video(url: String) -> String {
         .unwrap()
         .to_string()
 }
+
